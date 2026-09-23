@@ -1,0 +1,26 @@
+# Copy this into your Django repo as .sample-env and commit it (blanks only, never real secrets).
+# deployment_bootstrap.sh turns it into /etc/<project>/env on the server, generating the secret key.
+
+# Django
+DJANGO_DEBUG=false
+# Generate with: python3 -c "import secrets; print(secrets.token_urlsafe(50))"
+DJANGO_SECRET_KEY=
+DJANGO_ALLOWED_HOSTS=example.com,www.example.com
+
+# PostgreSQL
+# Same instance: set only POSTGRES_DB and leave the rest blank (local socket, peer authentication).
+# RDS later: fill in host, user and password.
+POSTGRES_DB=myapp
+POSTGRES_USER=
+POSTGRES_PASSWORD=
+POSTGRES_HOST=
+POSTGRES_PORT=
+
+# Email through AWS SES SMTP (setup_ses.sh writes these for you)
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=email-smtp.ap-south-1.amazonaws.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=true
+EMAIL_HOST_USER=
+EMAIL_HOST_PASSWORD=
+# DEFAULT_FROM_EMAIL=Example <no-reply@example.com>

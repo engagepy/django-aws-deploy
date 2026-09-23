@@ -1,0 +1,6 @@
+# Your project's own settings, and anything secret
+deploy.conf
+*.pem
+*.key
+.DS_Store
+__pycache__/

@@ -1,0 +1,19 @@
+# Copy to deploy.conf and edit for the project you are deploying.
+# Every script reads this file. deploy.conf itself is git-ignored: it names your repo and domain, not secrets.
+
+PROJECT=myapp                          # short name used for the Linux user, database, IAM users and systemd units
+DOMAIN=example.com                     # apex domain; www is handled alongside it
+REPO=git@github.com:you/myapp.git      # the (private) repo the server clones with a read-only deploy key
+WSGI_MODULE=myapp.wsgi                 # Django's WSGI module, the one next to settings.py
+
+AWS_PROFILE=myapp                      # local AWS CLI profile holding a scoped IAM user's keys (never root)
+REGION=ap-south-1                      # ap-south-1 = Mumbai; SES and EC2 both live here
+INSTANCE_TYPE=t4g.small                # 2 vCPU / 2 GB ARM; t4g.medium if the app and PostgreSQL need more room
+VOLUME_GB=30
+
+CERT_EMAIL=info@example.com            # Let's Encrypt expiry notices and the SES test recipient
+PUBLIC_KEY=$HOME/.ssh/id_ed25519.pub   # imported as the EC2 key pair; may be passphrase-protected
+
+WORKERS=2                              # gunicorn workers: 2 on a t4g.small, 3 on a t4g.medium
+PG_SHARED_BUFFERS=512MB                # 1GB on a t4g.medium
+PG_EFFECTIVE_CACHE=1GB                 # 2GB on a t4g.medium

@@ -14,6 +14,8 @@ VOLUME_GB=30
 CERT_EMAIL=info@example.com            # Let's Encrypt expiry notices and the SES test recipient
 PUBLIC_KEY=$HOME/.ssh/id_ed25519.pub   # imported as the EC2 key pair; may be passphrase-protected
 
+APP_REPO_PATH=                         # optional: local checkout of the Django project, so launch.sh can check it
+
 WORKERS=2                              # gunicorn workers: 2 on a t4g.small, 3 on a t4g.medium
 PG_SHARED_BUFFERS=512MB                # 1GB on a t4g.medium
 PG_EFFECTIVE_CACHE=1GB                 # 2GB on a t4g.medium

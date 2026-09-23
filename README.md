@@ -10,8 +10,15 @@ Browser ──HTTPS──▶ nginx ──unix socket──▶ gunicorn ──▶
                       one EC2 instance, one region, about $20/month
 ```
 
+```bash
+cp deploy.conf.example deploy.conf     # six values: project, domain, repo, wsgi module, profile, email
+./launch.sh                            # infrastructure → DNS → server → email → verify
+```
+
 | Script | Runs on | Does |
 |---|---|---|
+| **`launch.sh`** | your Mac | **The whole deploy, in order.** Checks first, waits for DNS, resumable |
+| `bootstrap_account.sh` | your Mac, once per AWS account | Hands a fresh account from root to an admin IAM user |
 | `bootstrap_iam.sh` | your Mac, once per project | IAM group, scoped policy, deploy user; adds teammates |
 | `provision_aws.sh` | your Mac | Key pair, security group, EC2 instance, Elastic IP, Route 53 zone and records |
 | `deployment_bootstrap.sh` | the server | PostgreSQL, app user, code, virtualenv, env file, gunicorn, nginx, HTTPS, backups |
@@ -19,6 +26,8 @@ Browser ──HTTPS──▶ nginx ──unix socket──▶ gunicorn ──▶
 
 Every script is **idempotent**: run it again any time and it fills in only what's missing.
 After the first deploy, shipping changes is one command: `ssh <project> "sudo <project>-deploy"`.
+
+Driving this with a coding agent? Point it at [AGENTS.md](AGENTS.md).
 
 **Cost**, ap-south-1 on demand: t4g.small ~$12/mo · 30 GB gp3 ~$3/mo · public IPv4 ~$3.60/mo ·
 Route 53 zone $0.50/mo · SES $0.10 per 1,000 emails → **about $20/month**.
@@ -41,17 +50,23 @@ can't silently weaken production.
 
 ## 2. AWS account setup (once per account)
 
-**Root is used exactly twice, ever:** to turn on MFA for root, and to create the first admin IAM user.
-After that, nobody signs in as root for day-to-day work. (AWS still requires root for a handful of account
-chores: changing the account's email, closing the account, and some billing settings.)
+Three rungs, and **root appears only on the first one**. Starting from a brand-new account with nothing but
+a root login:
 
-As root, one time:
-1. **IAM → Users → Create user**, e.g. `you-admin`, with `AdministratorAccess`.
-2. Turn on **MFA for that user and for root**.
-3. Create an access key for the admin user: `aws configure --profile admin`.
-4. Sign out of root.
+```bash
+aws login                 # browser sign-in as root (AWS CLI 2.32+); no access keys to create or store
+./bootstrap_account.sh    # creates an admin IAM user, stores its keys as the 'admin' profile
+```
 
-Then, per project (as the admin user, not root):
+`bootstrap_account.sh` is the **only** script you may run as root, and only this once. It creates an
+administrator IAM user, writes that user's keys into a local `admin` profile without printing them, and then
+prints the two MFA links to click. After that root is finished: `aws login` sessions expire by themselves, so
+there's nothing left lying around. (AWS still reserves a few chores for root: changing the account email,
+closing the account, some billing settings.)
+
+Already have an admin IAM user? Skip straight to the next rung with `aws configure --profile admin`.
+
+Then, per project, as that admin user:
 
 ```bash
 cp deploy.conf.example deploy.conf     # edit: PROJECT, DOMAIN, REPO, WSGI_MODULE, AWS_PROFILE…
@@ -74,29 +89,31 @@ credentials: individually revocable, and attributable in CloudTrail. Never share
 ## 3. Deploy a project
 
 ```bash
+./launch.sh --check-only     # preflight: credentials, keys, and your Django project's readiness
+./launch.sh                  # the real thing
+```
+
+`launch.sh` runs the phases in order and can be re-run at any point; anything already created is reused.
+It pauses at the only two steps a machine can't do for you:
+
+1. **Nameservers.** It prints four Route 53 nameservers and waits (`--wait-dns`, default 20 minutes) for the
+   delegation to appear. **Set them at your registrar.** If it times out it exits cleanly — run it again later.
+   HTTPS cannot be issued before this lands.
+2. **The GitHub deploy key.** Added automatically when `gh` is signed in; otherwise it prints the key and the
+   instruction, and you re-run once it's registered.
+
+Then it installs the server, generates the production secret key there, migrates, collects static files, requests
+the certificate, sets up nightly backups, configures SES, and finishes with live checks against your domain.
+
+Useful flags: `--skip-ses`, `--wait-dns <minutes>`, `--yes` (no prompts, for agents and CI).
+
+Prefer to drive the phases yourself? They're the same scripts:
+
+```bash
 ./provision_aws.sh
+scp deployment_bootstrap.sh deploy.conf <project>:~ && ssh <project> "sudo bash deployment_bootstrap.sh"
+./setup_ses.sh
 ```
-
-Creates the infrastructure and prints four nameservers plus an `ssh <project>` shortcut. **Point your
-registrar at those nameservers.** Watch for the switch with `dig @1.1.1.1 NS <domain> +short`; resolvers
-update at different speeds, so check a couple. HTTPS can't be issued until this lands.
-
-```bash
-scp deployment_bootstrap.sh deploy.conf <project>:~
-ssh <project> "sudo bash deployment_bootstrap.sh"
-```
-
-The **first run stops** and prints a deploy key, because GitHub doesn't know the server yet:
-
-```bash
-ssh <project> "sudo cat /srv/<project>/.ssh/id_ed25519.pub" > /tmp/deploy-key.pub
-gh repo deploy-key add /tmp/deploy-key.pub --repo you/yourrepo --title <project>-server
-ssh <project> "sudo bash deployment_bootstrap.sh"      # run it again
-```
-
-The full run installs everything, generates the production secret key on the server, runs migrations and
-`check --deploy`, sets up nightly backups, and requests the certificate once DNS points at the instance.
-If DNS isn't ready it says so and skips — just run it again later.
 
 Then the admin account, interactively so no password lands in a transcript:
 

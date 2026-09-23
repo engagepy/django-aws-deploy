@@ -187,6 +187,11 @@ echo "$https_headers" | grep -qi "strict-transport-security" && ok "HSTS header 
 ssh "$PROJECT" "systemctl is-active gunicorn nginx postgresql" | tr '\n' ' ' | sed 's/^/    services: /; s/$/\n/'
 ssh "$PROJECT" "sudo -H -u $PROJECT bash -c 'set -a; . /etc/$PROJECT/env; set +a; cd /srv/$PROJECT/app; /srv/$PROJECT/.venv/bin/python manage.py check --deploy'" \
     && ok "check --deploy is clean"
+# A server that stopped pulling keeps serving old code without a single error, so compare with GitHub.
+live=$(ssh "$PROJECT" "sudo -H -u $PROJECT git -C /srv/$PROJECT/app rev-parse HEAD")
+latest=$(ssh "$PROJECT" "sudo -H -u $PROJECT git -C /srv/$PROJECT/app ls-remote origin HEAD" | cut -f1)
+[ "$live" = "$latest" ] && ok "server runs the latest commit (${live:0:7})" \
+    || warn "server runs ${live:0:7} but the repo is at ${latest:0:7}; deploy with: ssh $PROJECT \"sudo $PROJECT-deploy\""
 
 cat <<DONE
 

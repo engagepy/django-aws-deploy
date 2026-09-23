@@ -80,7 +80,11 @@ KEY
         exit 1
     fi
 fi
-as_app git -C "$APP_DIR" pull --quiet --ff-only || true
+# The branch the repo was cloned on; <project>-deploy returns to it after a rollback.
+BRANCH=$(as_app git -C "$APP_DIR" symbolic-ref --short refs/remotes/origin/HEAD | sed 's|^origin/||')
+as_app git -C "$APP_DIR" checkout --quiet "$BRANCH"
+as_app git -C "$APP_DIR" pull --quiet --ff-only \
+    || echo "WARNING: could not pull the latest $BRANCH; the server keeps its current code. Run: sudo $PROJECT-deploy"
 
 say "Virtualenv"
 [ -x "$VENV/bin/python" ] || as_app python3 -m venv "$VENV"
@@ -129,20 +133,31 @@ SETENV
 chmod 750 /usr/local/sbin/$PROJECT-set-env
 
 # One command for every future deploy: ssh <project> "sudo <project>-deploy"
+# Installed on the server itself, so deploys never depend on scripts inside the app's repo.
 cat > /usr/local/sbin/$PROJECT-deploy <<DEPLOY
 #!/usr/bin/env bash
-# Pull, install, migrate, collect static files, check, reload.
+# Deploys the latest $BRANCH, or with a commit argument rolls back to it:
+#   sudo $PROJECT-deploy            latest commit on $BRANCH
+#   sudo $PROJECT-deploy <commit>   that commit (the next plain deploy returns to $BRANCH)
+# Then: install, migrate, collect static files, check, reload.
 set -euo pipefail
 [ "\$(id -u)" -eq 0 ] || { echo "Run with sudo"; exit 1; }
+repo() { sudo -H -u $APP_USER git -C $APP_DIR "\$@"; }
 run() { sudo -H -u $APP_USER bash -c "set -a; . '$ENV_FILE'; set +a; cd '$APP_DIR'; \$*"; }
-echo "==> Current: \$(sudo -H -u $APP_USER git -C $APP_DIR rev-parse --short HEAD)"
-sudo -H -u $APP_USER git -C $APP_DIR pull --ff-only
+echo "==> Current: \$(repo rev-parse --short HEAD)"
+if [ -n "\${1:-}" ]; then
+    repo fetch --quiet origin
+    repo checkout --quiet --detach "\$1"
+else
+    repo checkout --quiet $BRANCH
+    repo pull --ff-only
+fi
 sudo -H -u $APP_USER $VENV/bin/pip install --quiet -r $APP_DIR/requirements.txt
 run "$VENV/bin/python manage.py migrate --noinput"
 run "$VENV/bin/python manage.py collectstatic --noinput" >/dev/null
 run "$VENV/bin/python manage.py check --deploy"
 systemctl reload gunicorn
-echo "==> Deployed:  \$(sudo -H -u $APP_USER git -C $APP_DIR rev-parse --short HEAD)"
+echo "==> Deployed:  \$(repo rev-parse --short HEAD)"
 DEPLOY
 chmod 750 /usr/local/sbin/$PROJECT-deploy
 

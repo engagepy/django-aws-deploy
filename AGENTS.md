@@ -97,6 +97,8 @@ through a transcript.
 | Locked out completely | `aws ec2-instance-connect send-ssh-public-key --instance-id <id> --availability-zone <az> --instance-os-user ubuntu --ssh-public-key file://~/.ssh/<project>_deploy.pub` opens a 60-second window |
 | certbot says the domain doesn't resolve | Delegation hasn't propagated; re-run `./launch.sh` later |
 | Site shows an old parking page | A resolver cache. Prove the server with `curl -s --resolve <domain>:443:<ip> https://<domain> \| grep title` |
+| Changes pushed but not on the site | The server never pulled. Compare `git -C /srv/<project>/app rev-parse HEAD` with GitHub, then `sudo <project>-deploy`. Always deploy with that command, never a script inside the app's repo: the server's copy may predate it |
+| Rolling back | `sudo <project>-deploy <commit>`, never a manual `git checkout` (a detached HEAD breaks later pulls). Reverse any migrations first |
 | Pages render unstyled | `collectstatic` didn't run, or `/srv/<project>` lost `755` so nginx can't read `staticfiles/` |
 | `DisallowedHost` | Add the hostname to `DJANGO_ALLOWED_HOSTS` in the env file, then restart gunicorn |
 | `MalformedPolicyDocument` | Generate IAM policy JSON with python, never inline shell heredocs |

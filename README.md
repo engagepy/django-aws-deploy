@@ -157,7 +157,8 @@ a real signup email arrives.
 | Logs | `ssh <project> "journalctl -u gunicorn -f"` |
 | Change a setting | edit `/etc/<project>/env`, then `sudo systemctl restart gunicorn` |
 | Add settings without echoing secrets | `printf 'KEY=value\n' \| ssh <project> "sudo <project>-set-env && sudo systemctl restart gunicorn"` |
-| Roll back | `ssh <project> "sudo -H -u <project> git -C /srv/<project>/app checkout <commit> && sudo <project>-deploy"` |
+| Roll back | `ssh <project> "sudo <project>-deploy <commit>"`; the next plain `<project>-deploy` returns to the latest. Migrations don't reverse themselves: undo one first with `manage.py migrate <app> <previous>` |
+| Check what's live | `ssh <project> "sudo -H -u <project> git -C /srv/<project>/app log --oneline -1"`, or re-run `./launch.sh`, whose Verify phase compares it with GitHub |
 | Restore a backup | `pg_restore --clean --dbname <project> /srv/<project>/backups/<file>.dump` |
 | Resize the instance | stop it, `aws ec2 modify-instance-attribute --instance-id <id> --instance-type t4g.medium`, start it, then raise `WORKERS` and the PostgreSQL sizes in `deploy.conf` and re-run the bootstrap |
 | Rotate deploy keys | delete the old access key in IAM, re-run `bootstrap_iam.sh` |

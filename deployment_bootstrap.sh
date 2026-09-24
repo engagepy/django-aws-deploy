@@ -248,6 +248,40 @@ cat > /etc/cron.d/$PROJECT-backup <<CRON
 30 2 * * * $APP_USER pg_dump --format=custom $PROJECT > $APP_HOME/backups/$PROJECT-\$(date +\%F).dump && find $APP_HOME/backups -name '*.dump' -mtime +14 -delete
 CRON
 
+say "Scheduled management commands (systemd template unit)"
+# Any management command can be scheduled with a small .timer whose Unit= is $PROJECT-job@<command>.service.
+# Output goes to the journal (journalctl -u $PROJECT-job@<command>); a failed run starts $PROJECT-job-failed@<command>,
+# which calls the project's own `manage.py job_failed <command>` (typically: email the owner) if it defines one.
+cat > /etc/systemd/system/$PROJECT-job@.service <<UNIT
+[Unit]
+Description=$PROJECT job: manage.py %i
+After=network-online.target postgresql.service
+OnFailure=$PROJECT-job-failed@%i.service
+
+[Service]
+Type=oneshot
+User=$APP_USER
+Group=$APP_USER
+WorkingDirectory=$APP_DIR
+EnvironmentFile=$ENV_FILE
+ExecStart=$VENV/bin/python manage.py %i
+PrivateTmp=true
+UNIT
+cat > /etc/systemd/system/$PROJECT-job-failed@.service <<UNIT
+[Unit]
+Description=$PROJECT: report that job %i failed
+
+[Service]
+Type=oneshot
+User=$APP_USER
+Group=$APP_USER
+WorkingDirectory=$APP_DIR
+EnvironmentFile=$ENV_FILE
+ExecStart=$VENV/bin/python manage.py job_failed %i
+PrivateTmp=true
+UNIT
+systemctl daemon-reload
+
 say "HTTPS certificate"
 token=$(curl -fsS -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 60" || true)
 public_ip=$(curl -fsS -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/public-ipv4 || true)

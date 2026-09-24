@@ -33,6 +33,9 @@ Do not create any AWS resource until you have all of these. Never guess them.
 - Run `./launch.sh --check-only` first and report what fails.
 - Verify with real commands and report the real output. Never claim a deployment works without a 200 from the site.
 - Tell the user plainly when something is waiting on *them* (see Gates).
+- Schedule recurring management commands with a systemd `.timer` on the `<project>-job@<command>` template the
+  bootstrap installs (see README "Schedule a management command"). Don't propose Celery, Redis or a queue for
+  daily/weekly jobs.
 
 ## The normal path
 

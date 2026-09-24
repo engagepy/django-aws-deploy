@@ -21,7 +21,7 @@ cp deploy.conf.example deploy.conf     # six values: project, domain, repo, wsgi
 | `bootstrap_account.sh` | your Mac, once per AWS account | Hands a fresh account from root to an admin IAM user |
 | `bootstrap_iam.sh` | your Mac, once per project | IAM group, scoped policy, deploy user; adds teammates |
 | `provision_aws.sh` | your Mac | Key pair, security group, EC2 instance, Elastic IP, Route 53 zone and records |
-| `deployment_bootstrap.sh` | the server | PostgreSQL, app user, code, virtualenv, env file, gunicorn, nginx, HTTPS, backups |
+| `deployment_bootstrap.sh` | the server | PostgreSQL, app user, code, virtualenv, env file, gunicorn, nginx, HTTPS, backups, job template for timers |
 | `setup_ses.sh` | your Mac | SES identity, DKIM/SPF/DMARC records, SMTP credentials, production-access request |
 
 Every script is **idempotent**: run it again any time and it fills in only what's missing.
@@ -160,6 +160,7 @@ a real signup email arrives.
 | Roll back | `ssh <project> "sudo <project>-deploy <commit>"`; the next plain `<project>-deploy` returns to the latest. Migrations don't reverse themselves: undo one first with `manage.py migrate <app> <previous>` |
 | Check what's live | `ssh <project> "sudo -H -u <project> git -C /srv/<project>/app log --oneline -1"`, or re-run `./launch.sh`, whose Verify phase compares it with GitHub |
 | Restore a backup | `pg_restore --clean --dbname <project> /srv/<project>/backups/<file>.dump` |
+| Schedule a management command | Write `/etc/systemd/system/<project>-<name>.timer` with `OnCalendar=Mon *-*-* 09:00 Asia/Kolkata`, `Persistent=true` and `Unit=<project>-job@<command>.service`, then `systemctl enable --now` it. The bootstrap installs the `<project>-job@` template; no Celery or Redis needed for daily/weekly jobs. Logs: `journalctl -u <project>-job@<command>`. A failed run starts `<project>-job-failed@<command>`, which runs your `manage.py job_failed <command>` (add one that emails you) |
 | Resize the instance | stop it, `aws ec2 modify-instance-attribute --instance-id <id> --instance-type t4g.medium`, start it, then raise `WORKERS` and the PostgreSQL sizes in `deploy.conf` and re-run the bootstrap |
 | Rotate deploy keys | delete the old access key in IAM, re-run `bootstrap_iam.sh` |
 | Move to RDS | `pg_dump`/`pg_restore` across, then fill `POSTGRES_HOST/USER/PASSWORD` in the env file and restart |

@@ -16,6 +16,7 @@ Do not create any AWS resource until you have all of these. Never guess them.
 | **Contact email** | Certificate notices and the SES test recipient. **Never default to a personal address** — ask for a project mailbox |
 | **Region** and **instance size** | Defaults: `ap-south-1`, `t4g.small`. Confirm, don't assume |
 | **Which AWS profile** to use | Must be a scoped IAM user, never root |
+| **Its own instance, or share one?** | Sharing: set `HOST_ON=<existing project>` and that project's `AWS_PROFILE` (README "Two small projects, one instance") |
 
 ## Rules
 
@@ -110,6 +111,12 @@ through a transcript.
 | `DisallowedHost` | Add the hostname to `DJANGO_ALLOWED_HOSTS` in the env file, then restart gunicorn |
 | `MalformedPolicyDocument` | Generate IAM policy JSON with python, never inline shell heredocs |
 | "authorization grant is invalid" | A root/`aws login` session expired — switch to the scoped IAM profile |
+
+## Sharing an instance
+
+With `HOST_ON`, the project's gunicorn units are `<project>-gunicorn`, never the host's plain `gunicorn`: use that
+name in every `systemctl`/`journalctl` command. Never restart or edit the host's units, nginx site or PostgreSQL
+config while deploying the guest.
 
 ## Changing these scripts
 

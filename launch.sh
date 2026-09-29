@@ -51,7 +51,8 @@ for required in PROJECT DOMAIN REPO WSGI_MODULE AWS_PROFILE REGION INSTANCE_TYPE
     [ -n "${!required:-}" ] || fail "$required is not set in deploy.conf"
 done
 [ "$FAILED" -eq 0 ] || { echo; echo "Fix deploy.conf and run again."; exit 1; }
-ok "deploy.conf: $PROJECT → $DOMAIN ($REGION, ${HOST_ON:+on $HOST_ON's instance}${HOST_ON:-$INSTANCE_TYPE})"
+where="$INSTANCE_TYPE"; [ -n "${HOST_ON:-}" ] && where="sharing the $HOST_ON instance"
+ok "deploy.conf: $PROJECT → $DOMAIN ($REGION, $where)"
 # A project sharing another project's instance (HOST_ON) gets its own gunicorn units; the first
 # project on an instance keeps the plain name "gunicorn", as it always has.
 SERVICE="gunicorn"; [ -n "${HOST_ON:-}" ] && SERVICE="$PROJECT-gunicorn"

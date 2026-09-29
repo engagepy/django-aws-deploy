@@ -15,6 +15,8 @@ CERT_EMAIL=info@example.com            # Let's Encrypt expiry notices and the SE
 PUBLIC_KEY=$HOME/.ssh/id_ed25519.pub   # imported as the EC2 key pair; may be passphrase-protected
 
 APP_REPO_PATH=                         # optional: local checkout of the Django project, so launch.sh can check it
+FRONTEND_DIR=                          # optional: folder in the repo with a package.json (e.g. frontend); the server
+                                       # installs Node.js and runs `npm ci && npm run build` there before collectstatic
 
 WORKERS=2                              # gunicorn workers: 2 on a t4g.small, 3 on a t4g.medium
 PG_SHARED_BUFFERS=512MB                # 1GB on a t4g.medium

@@ -30,6 +30,23 @@ export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
 apt-get update -qq
 apt-get install -y -qq python3-venv nginx git certbot python3-certbot-nginx postgresql >/dev/null
 
+if [ -n "${FRONTEND_DIR:-}" ]; then
+    say "Node.js (FRONTEND_DIR=$FRONTEND_DIR is built on the server)"
+    if command -v node >/dev/null && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]; then
+        echo "node $(node -v) already installed"
+    else
+        # NodeSource's signed apt repository: Ubuntu's own nodejs is too old for current build tools.
+        install -d -m 755 /etc/apt/keyrings
+        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+            | gpg --dearmor --yes -o /etc/apt/keyrings/nodesource.gpg
+        echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+            > /etc/apt/sources.list.d/nodesource.list
+        apt-get update -qq
+        apt-get install -y -qq nodejs >/dev/null
+        echo "installed node $(node -v)"
+    fi
+fi
+
 say "Swap file (small instances need the headroom)"
 if [ -f /swapfile ]; then
     echo "already present"
@@ -153,6 +170,7 @@ else
     repo pull --ff-only
 fi
 sudo -H -u $APP_USER $VENV/bin/pip install --quiet -r $APP_DIR/requirements.txt
+$( [ -n "${FRONTEND_DIR:-}" ] && echo "run \"cd $APP_DIR/$FRONTEND_DIR && npm ci --no-audit --no-fund --loglevel=error && npm run build\"" )
 run "$VENV/bin/python manage.py migrate --noinput"
 run "$VENV/bin/python manage.py collectstatic --noinput" >/dev/null
 run "$VENV/bin/python manage.py check --deploy"
@@ -237,6 +255,11 @@ NGINX
     rm -f /etc/nginx/sites-enabled/default
 fi
 nginx -t >/dev/null && systemctl reload nginx
+
+if [ -n "${FRONTEND_DIR:-}" ]; then
+    say "Frontend build ($FRONTEND_DIR)"
+    as_app bash -c "cd '$APP_DIR/$FRONTEND_DIR' && npm ci --no-audit --no-fund --loglevel=error && npm run build"
+fi
 
 say "Django (migrate, static files, deployment checks)"
 manage migrate --noinput

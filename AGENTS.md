@@ -70,6 +70,9 @@ The Django project itself needs `templates/settings-snippet.py` merged into its 
 its repo root, and `gunicorn` + `psycopg[binary]` + `tzdata` in `requirements.txt`. Preflight checks all of this
 when `APP_REPO_PATH` points at a local checkout.
 
+If the project has a JavaScript frontend, set `FRONTEND_DIR` (the folder with `package.json` and `package-lock.json`).
+The server then builds it with Node.js 22 on every deploy, before `collectstatic`. Don't commit build output instead.
+
 ## Gates: the two things only a human can do
 
 1. **Nameservers at the registrar.** `launch.sh` prints four Route 53 nameservers and waits (default 20 minutes).
@@ -103,6 +106,7 @@ through a transcript.
 | Changes pushed but not on the site | The server never pulled. Compare `git -C /srv/<project>/app rev-parse HEAD` with GitHub, then `sudo <project>-deploy`. Always deploy with that command, never a script inside the app's repo: the server's copy may predate it |
 | Rolling back | `sudo <project>-deploy <commit>`, never a manual `git checkout` (a detached HEAD breaks later pulls). Reverse any migrations first |
 | Pages render unstyled | `collectstatic` didn't run, or `/srv/<project>` lost `755` so nginx can't read `staticfiles/` |
+| Deploy stops at `npm ci` | `package-lock.json` is out of date with `package.json`; run `npm install` locally, commit the lock file, deploy again |
 | `DisallowedHost` | Add the hostname to `DJANGO_ALLOWED_HOSTS` in the env file, then restart gunicorn |
 | `MalformedPolicyDocument` | Generate IAM policy JSON with python, never inline shell heredocs |
 | "authorization grant is invalid" | A root/`aws login` session expired — switch to the scoped IAM profile |

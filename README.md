@@ -21,7 +21,7 @@ cp deploy.conf.example deploy.conf     # six values: project, domain, repo, wsgi
 | `bootstrap_account.sh` | your Mac, once per AWS account | Hands a fresh account from root to an admin IAM user |
 | `bootstrap_iam.sh` | your Mac, once per project | IAM group, scoped policy, deploy user; adds teammates |
 | `provision_aws.sh` | your Mac | Key pair, security group, EC2 instance, Elastic IP, Route 53 zone and records |
-| `deployment_bootstrap.sh` | the server | PostgreSQL, app user, code, virtualenv, env file, gunicorn, nginx, HTTPS, backups, job template for timers |
+| `deployment_bootstrap.sh` | the server | PostgreSQL, app user, code, virtualenv, optional frontend build, env file, gunicorn, nginx, HTTPS, backups, job template for timers |
 | `setup_ses.sh` | your Mac | SES identity, DKIM/SPF/DMARC records, SMTP credentials, production-access request |
 
 Every script is **idempotent**: run it again any time and it fills in only what's missing.
@@ -47,6 +47,11 @@ Four things, all small:
 
 Worth adding: a test that runs `manage.py check --deploy` with production variables, so a settings change
 can't silently weaken production.
+
+**A JavaScript frontend (React, Vue, …)?** Set `FRONTEND_DIR` in `deploy.conf` to the folder holding its
+`package.json` and `package-lock.json`. The server installs Node.js 22 and runs `npm ci && npm run build` there on
+every deploy, before `collectstatic`, so build output never needs committing. Point the build at a folder listed in
+`STATICFILES_DIRS`.
 
 ## 2. AWS account setup (once per account)
 

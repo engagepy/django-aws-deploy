@@ -98,6 +98,10 @@ if [ -n "${APP_REPO_PATH:-}" ] && [ -d "$APP_REPO_PATH" ]; then
         grep -q "POSTGRES_DB" "$settings" && ok "settings read POSTGRES_DB" \
             || fail "settings.py doesn't read POSTGRES_DB — copy templates/settings-snippet.py"
     fi
+    if [ -n "${FRONTEND_DIR:-}" ]; then
+        [ -f "$APP_REPO_PATH/$FRONTEND_DIR/package-lock.json" ] && ok "frontend at $FRONTEND_DIR (built on the server)" \
+            || fail "FRONTEND_DIR=$FRONTEND_DIR needs a package.json and package-lock.json (the server runs npm ci)"
+    fi
 else
     warn "APP_REPO_PATH not set — skipping the Django project checks"
 fi

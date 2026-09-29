@@ -23,7 +23,11 @@ while [ $# -gt 0 ]; do
 done
 SERVER="${SERVER:-$PROJECT}"
 TEST_EMAIL="${TEST_EMAIL:-$CERT_EMAIL}"
-SMTP_USER_NAME="$PROJECT-ses-smtp"
+# On a shared instance the SMTP user lives under the host project's IAM scope (<host>-*).
+SMTP_USER_NAME="${HOST_ON:+$HOST_ON-}$PROJECT-ses-smtp"
+# A project sharing another project's instance (HOST_ON) gets its own gunicorn units; the first
+# project on an instance keeps the plain name "gunicorn", as it always has.
+SERVICE="gunicorn"; [ -n "${HOST_ON:-}" ] && SERVICE="$PROJECT-gunicorn"
 
 aws() { command aws --profile "$AWS_PROFILE" --region "$REGION" "$@"; }
 say() { printf "\n==> %s\n" "$*"; }
@@ -97,8 +101,8 @@ PY
     say "Writing email settings onto the server"
     printf 'EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend\nEMAIL_HOST=email-smtp.%s.amazonaws.com\nEMAIL_PORT=587\nEMAIL_USE_TLS=true\nEMAIL_HOST_USER=%s\nEMAIL_HOST_PASSWORD=%s\n' \
         "$REGION" "$SMTP_USERNAME" "$SMTP_PASSWORD" \
-        | ssh "$SERVER" "sudo /usr/local/sbin/$PROJECT-set-env && sudo systemctl restart gunicorn"
-    echo "done (gunicorn restarted)"
+        | ssh "$SERVER" "sudo /usr/local/sbin/$PROJECT-set-env && sudo systemctl restart $SERVICE"
+    echo "done ($SERVICE restarted)"
 fi
 
 say "Test recipient while SES is in the sandbox"

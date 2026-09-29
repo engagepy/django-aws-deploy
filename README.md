@@ -188,6 +188,23 @@ Backups are nightly `pg_dump` files in `/srv/<project>/backups`, kept 14 days. C
 | `MalformedPolicyDocument` from IAM | Shell quoting mangled the JSON. Generate policy files with python, never inline heredocs. |
 | AWS calls fail with "authorization grant is invalid" | A root/`aws login` session expired. That's exactly what the scoped IAM profile avoids. |
 
+## Two small projects, one instance
+
+Set `HOST_ON=<existing project>` in the new project's `deploy.conf` and use the same `AWS_PROFILE` as that
+project. `launch.sh` then creates no instance: it reuses the host's instance, Elastic IP, SSH key and PostgreSQL, and
+adds only what's per project: a Linux user, a database, `<project>-gunicorn.socket/.service`, an nginx site, a
+certificate, a Route 53 zone, and an SES identity. The host's services are never renamed or restarted.
+
+| | Host project | Project with `HOST_ON` |
+|---|---|---|
+| gunicorn units | `gunicorn` | `<project>-gunicorn` |
+| Logs | `journalctl -u gunicorn` | `journalctl -u <project>-gunicorn` |
+| PostgreSQL sizing | set by its `PG_*` values | left as the host set it |
+| SES SMTP IAM user | `<project>-ses-smtp` | `<host>-<project>-ses-smtp` (inside the host's IAM scope) |
+
+Each keeps its own deploy command (`sudo <project>-deploy`). Watch memory: a t4g.small comfortably runs two quiet
+Django apps with 2 workers each; move to a t4g.medium before adding a third.
+
 ## 7. What this deliberately doesn't do
 
 One instance, one region, no load balancer, no CI/CD, no containers, no CDN, and PostgreSQL on the same box.

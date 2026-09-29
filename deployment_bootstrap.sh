@@ -18,6 +18,9 @@ APP_HOME="/srv/$PROJECT"
 APP_DIR="$APP_HOME/app"
 VENV="$APP_HOME/.venv"
 ENV_FILE="/etc/$PROJECT/env"
+# A project sharing another project's instance (HOST_ON) gets its own gunicorn units; the first
+# project on an instance keeps the plain name "gunicorn", as it always has.
+SERVICE="gunicorn"; [ -n "${HOST_ON:-}" ] && SERVICE="$PROJECT-gunicorn"
 
 [ "$(id -u)" -eq 0 ] || { echo "Run with sudo"; exit 1; }
 say() { printf "\n==> %s\n" "$*"; }
@@ -67,14 +70,18 @@ sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$APP_USER'" | 
     || sudo -u postgres createuser "$APP_USER"
 sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$PROJECT'" | grep -q 1 \
     || sudo -u postgres createdb --owner "$APP_USER" "$PROJECT"
-for conf_dir in /etc/postgresql/*/main/conf.d; do
-    cat > "$conf_dir/$PROJECT.conf" <<CONF
+if [ -n "${HOST_ON:-}" ]; then
+    echo "sharing $HOST_ON's PostgreSQL; its sizing stays as it is"
+else
+    for conf_dir in /etc/postgresql/*/main/conf.d; do
+        cat > "$conf_dir/$PROJECT.conf" <<CONF
 # Sized for this instance by deployment_bootstrap.sh
 shared_buffers = $PG_SHARED_BUFFERS
 effective_cache_size = $PG_EFFECTIVE_CACHE
 CONF
-done
-systemctl reload postgresql
+    done
+    systemctl reload postgresql
+fi
 echo "database '$PROJECT' owned by '$APP_USER' (peer authentication, no password)"
 
 say "Deploy key and code"
@@ -174,28 +181,28 @@ $( [ -n "${FRONTEND_DIR:-}" ] && echo "run \"cd $APP_DIR/$FRONTEND_DIR && npm ci
 run "$VENV/bin/python manage.py migrate --noinput"
 run "$VENV/bin/python manage.py collectstatic --noinput" >/dev/null
 run "$VENV/bin/python manage.py check --deploy"
-systemctl reload gunicorn
+systemctl reload $SERVICE
 echo "==> Deployed:  \$(repo rev-parse --short HEAD)"
 DEPLOY
 chmod 750 /usr/local/sbin/$PROJECT-deploy
 
-say "gunicorn service"
-cat > /etc/systemd/system/gunicorn.socket <<UNIT
+say "gunicorn service ($SERVICE)"
+cat > /etc/systemd/system/$SERVICE.socket <<UNIT
 [Unit]
 Description=$PROJECT gunicorn socket
 
 [Socket]
-ListenStream=/run/gunicorn.sock
+ListenStream=/run/$SERVICE.sock
 SocketUser=www-data
 SocketMode=600
 
 [Install]
 WantedBy=sockets.target
 UNIT
-cat > /etc/systemd/system/gunicorn.service <<UNIT
+cat > /etc/systemd/system/$SERVICE.service <<UNIT
 [Unit]
 Description=$PROJECT (gunicorn)
-Requires=gunicorn.socket
+Requires=$SERVICE.socket
 After=network.target postgresql.service
 
 [Service]
@@ -218,7 +225,7 @@ UNIT
 systemctl daemon-reload
 # Enabling the service as well as the socket means it is already running after a reboot,
 # so the first visitor doesn't wait for it to start.
-systemctl enable --quiet --now gunicorn.socket gunicorn.service
+systemctl enable --quiet --now $SERVICE.socket $SERVICE.service
 
 say "nginx site"
 if [ -f /etc/nginx/sites-available/$PROJECT ]; then
@@ -226,7 +233,7 @@ if [ -f /etc/nginx/sites-available/$PROJECT ]; then
 else
     cat > /etc/nginx/sites-available/$PROJECT <<NGINX
 upstream $PROJECT {
-    server unix:/run/gunicorn.sock fail_timeout=0;
+    server unix:/run/$SERVICE.sock fail_timeout=0;
 }
 
 server {
@@ -318,12 +325,12 @@ else
     echo "Finish the nameserver change, wait for it to take effect, then run this script again."
 fi
 
-systemctl restart gunicorn
+systemctl restart $SERVICE
 say "Server ready"
 cat <<NEXT
 
   Site      : https://$DOMAIN (http until the certificate is installed)
-  Logs      : journalctl -u gunicorn -f
+  Logs      : journalctl -u $SERVICE -f
   Deploy    : ssh $PROJECT "sudo $PROJECT-deploy"
   Admin user: sudo -H -u $APP_USER bash -c 'set -a; . $ENV_FILE; set +a; cd $APP_DIR; $VENV/bin/python manage.py createsuperuser'
 

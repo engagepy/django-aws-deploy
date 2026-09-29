@@ -51,7 +51,11 @@ for required in PROJECT DOMAIN REPO WSGI_MODULE AWS_PROFILE REGION INSTANCE_TYPE
     [ -n "${!required:-}" ] || fail "$required is not set in deploy.conf"
 done
 [ "$FAILED" -eq 0 ] || { echo; echo "Fix deploy.conf and run again."; exit 1; }
-ok "deploy.conf: $PROJECT → $DOMAIN ($REGION, $INSTANCE_TYPE)"
+where="$INSTANCE_TYPE"; [ -n "${HOST_ON:-}" ] && where="sharing the $HOST_ON instance"
+ok "deploy.conf: $PROJECT → $DOMAIN ($REGION, $where)"
+# A project sharing another project's instance (HOST_ON) gets its own gunicorn units; the first
+# project on an instance keeps the plain name "gunicorn", as it always has.
+SERVICE="gunicorn"; [ -n "${HOST_ON:-}" ] && SERVICE="$PROJECT-gunicorn"
 
 if command -v aws >/dev/null; then
     aws_version=$(aws --version 2>&1 | sed -E 's|aws-cli/([0-9]+\.[0-9]+).*|\1|')
@@ -188,7 +192,7 @@ https_headers=$(curl -sI "https://$DOMAIN" || true)
 echo "$https_headers" | grep -q "200" && ok "https://$DOMAIN serves 200" || warn "https://$DOMAIN did not return 200 yet"
 echo "$https_headers" | grep -qi "strict-transport-security" && ok "HSTS header present" || warn "no HSTS header"
 
-ssh "$PROJECT" "systemctl is-active gunicorn nginx postgresql" | tr '\n' ' ' | sed 's/^/    services: /; s/$/\n/'
+ssh "$PROJECT" "systemctl is-active $SERVICE nginx postgresql" | tr '\n' ' ' | sed 's/^/    services: /; s/$/\n/'
 ssh "$PROJECT" "sudo -H -u $PROJECT bash -c 'set -a; . /etc/$PROJECT/env; set +a; cd /srv/$PROJECT/app; /srv/$PROJECT/.venv/bin/python manage.py check --deploy'" \
     && ok "check --deploy is clean"
 # A server that stopped pulling keeps serving old code without a single error, so compare with GitHub.

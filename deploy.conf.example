@@ -14,6 +14,9 @@ VOLUME_GB=30
 CERT_EMAIL=info@example.com            # Let's Encrypt expiry notices and the SES test recipient
 PUBLIC_KEY=$HOME/.ssh/id_ed25519.pub   # imported as the EC2 key pair; may be passphrase-protected
 
+HOST_ON=                               # optional: an existing project whose instance to share (e.g. myotherapp).
+                                       # Reuses its instance, IP, SSH key and PostgreSQL; this project gets its own
+                                       # user, database, <project>-gunicorn units, nginx site and certificate
 APP_REPO_PATH=                         # optional: local checkout of the Django project, so launch.sh can check it
 FRONTEND_DIR=                          # optional: folder in the repo with a package.json (e.g. frontend); the server
                                        # installs Node.js and runs `npm ci && npm run build` there before collectstatic
